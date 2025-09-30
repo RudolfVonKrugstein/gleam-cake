@@ -8,7 +8,8 @@ import cake.{
 }
 import cake/dialect/sqlite_dialect
 import cake/param.{
-  type Param, BoolParam, FloatParam, IntParam, NullParam, StringParam,
+  type Param, BoolParam, DateParam, FloatParam, IntParam, NullParam, StringParam,
+  TimeParam,
 }
 import gleam/dynamic/decode.{type Decoder}
 import gleam/list
@@ -118,5 +119,7 @@ fn cake_param_to_client_param(param param: Param) -> Value {
     IntParam(param) -> sqlight.int(param)
     StringParam(param) -> sqlight.text(param)
     NullParam -> sqlight.null()
+    DateParam(param) -> sqlight.text()
+    TimeParam(param) -> sqlight.text()
   }
 }

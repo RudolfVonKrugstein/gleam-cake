@@ -9,7 +9,6 @@ import cake/internal/write_query.{
   InsertSourceRecords, InsertSourceRows, NoInsertColumns, NoInsertIntoTable,
   NoInsertModifier, NoInsertSource, NoReturning, Returning,
 }
-import cake/param.{BoolParam, FloatParam, IntParam, NullParam, StringParam}
 import gleam/string
 
 // ┌───────────────────────────────────────────────────────────────────────────┐
@@ -22,43 +21,43 @@ pub type Comment =
 pub type Epilog =
   read_query.Epilog
 
-pub type Where =
-  read_query.Where
+pub type Where(param) =
+  read_query.Where(param)
 
 // ┌───────────────────────────────────────────────────────────────────────────┐
 // │  write_query type re-exports                                              │
 // └───────────────────────────────────────────────────────────────────────────┘
 
-pub type Insert(a) =
-  write_query.Insert(a)
+pub type Insert(a, param) =
+  write_query.Insert(a, param)
 
 pub type InsertColumns =
   write_query.InsertColumns
 
-pub type InsertConflictStrategy(a) =
-  write_query.InsertConflictStrategy(a)
+pub type InsertConflictStrategy(a, param) =
+  write_query.InsertConflictStrategy(a, param)
 
 pub type InsertIntoTable =
   write_query.InsertIntoTable
 
-pub type InsertRow =
-  write_query.InsertRow
+pub type InsertRow(param) =
+  write_query.InsertRow(param)
 
-pub type InsertSource(a) =
-  write_query.InsertSource(a)
+pub type InsertSource(a, param) =
+  write_query.InsertSource(a, param)
 
-pub type InsertValue =
-  write_query.InsertValue
+pub type InsertValue(param) =
+  write_query.InsertValue(param)
 
-pub type Update(a) =
-  write_query.Update(a)
+pub type Update(a, param) =
+  write_query.Update(a, param)
 
-pub type WriteQuery(a) =
-  write_query.WriteQuery(a)
+pub type WriteQuery(a, param) =
+  write_query.WriteQuery(a, param)
 
 /// Creates a `WriteQuery` from an `Insert` query.
 ///
-pub fn to_query(insert isrt: Insert(a)) -> WriteQuery(a) {
+pub fn to_query(insert isrt: Insert(a, param)) -> WriteQuery(a, param) {
   isrt |> InsertQuery
 }
 
@@ -66,13 +65,13 @@ pub fn to_query(insert isrt: Insert(a)) -> WriteQuery(a) {
 
 /// Create an `InsertRow` from a list of `InsertValue`s.
 ///
-pub fn row(values vls: List(InsertValue)) -> InsertRow {
+pub fn row(values vls: List(InsertValue(param))) -> InsertRow(param) {
   vls |> InsertRow
 }
 
 /// Create an `InsertValue` from a column `String` and a `Bool` value.
 ///
-pub fn bool(value vl: Bool) -> InsertValue {
+pub fn bool(value vl: Bool) -> InsertValue(param) {
   vl |> BoolParam |> InsertParam
 }
 

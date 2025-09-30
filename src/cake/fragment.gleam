@@ -8,9 +8,6 @@
 ////
 
 import cake/internal/read_query
-import cake/param.{
-  type Param, BoolParam, FloatParam, IntParam, NullParam, StringParam,
-}
 import gleam/int
 import gleam/io
 import gleam/list
@@ -20,8 +17,8 @@ import gleam/order
 // │  read_query type re-exports                                               │
 // └───────────────────────────────────────────────────────────────────────────┘
 
-pub type Fragment =
-  read_query.Fragment
+pub type Fragment(param) =
+  read_query.Fragment(param)
 
 // ┌───────────────────────────────────────────────────────────────────────────┐
 // │  fragment                                                                 │
@@ -47,7 +44,7 @@ pub const placeholder = read_query.fragment_placeholder_grapheme
 ///
 /// ⛔ ⛔ ⛔
 ///
-pub fn prepared(string str: String, params prms: List(Param)) -> Fragment {
+pub fn prepared(string str: String, params prms: List(param)) -> Fragment(param) {
   let plchldr_count =
     str
     |> read_query.fragment_prepared_split_string
@@ -64,7 +61,7 @@ pub fn prepared(string str: String, params prms: List(Param)) -> Fragment {
     }
     0, _n, _not_eq -> {
       io.println_error(
-        "Fragment had 0 "
+        "Fragment(param) had 0 "
         <> placeholder
         <> "-placeholders, but there were "
         <> param_count |> int.to_string
@@ -74,7 +71,7 @@ pub fn prepared(string str: String, params prms: List(Param)) -> Fragment {
     }
     _n, 0, _not_eq -> {
       io.println_error(
-        "Fragment had "
+        "Fragment(param) had "
         <> plchldr_count |> int.to_string
         <> " "
         <> placeholder
@@ -84,7 +81,7 @@ pub fn prepared(string str: String, params prms: List(Param)) -> Fragment {
     }
     _n, _m, _not_eq -> {
       io.println_error(
-        "Fragment had "
+        "Fragment(param) had "
         <> plchldr_count |> int.to_string
         <> " "
         <> placeholder
@@ -105,52 +102,6 @@ pub fn prepared(string str: String, params prms: List(Param)) -> Fragment {
 ///
 /// ⛔ ⛔ ⛔
 ///
-pub fn literal(string str: String) -> Fragment {
+pub fn literal(string str: String) -> Fragment(param) {
   str |> read_query.FragmentLiteral
-}
-
-// ┌───────────────────────────────────────────────────────────────────────────┐
-// │  params                                                                   │
-// └───────────────────────────────────────────────────────────────────────────┘
-
-/// Create a new `Param` with a `Bool` value.
-///
-pub fn bool(value vl: Bool) -> Param {
-  vl |> BoolParam
-}
-
-/// Create a new `Param` with a `True` value.
-///
-pub fn true() -> Param {
-  True |> BoolParam
-}
-
-/// Create a new `Param` with a `True` value.
-///
-pub fn false() -> Param {
-  False |> BoolParam
-}
-
-/// Create a new `Param` with a `Float` value.
-///
-pub fn float(value vl: Float) -> Param {
-  vl |> FloatParam
-}
-
-/// Create a new `Param` with an `Int` value.
-///
-pub fn int(value vl: Int) -> Param {
-  vl |> IntParam
-}
-
-/// Create a new `Param` with a `String` value.
-///
-pub fn string(value vl: String) -> Param {
-  vl |> StringParam
-}
-
-/// Create a new `Param` with an SQL `NULL` value.
-///
-pub fn null() -> Param {
-  NullParam
 }

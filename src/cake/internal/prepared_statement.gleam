@@ -4,7 +4,6 @@
 ////
 
 import cake/internal/dialect.{type Dialect, Maria, Mysql, Postgres, Sqlite}
-import cake/param.{type Param}
 import gleam/int
 import gleam/list
 
@@ -13,11 +12,11 @@ import gleam/list
 /// The parameters are then passed to the database adapter to be escaped
 /// and inserted into the query.
 ///
-pub opaque type PreparedStatement {
+pub opaque type PreparedStatement(param) {
   PreparedStatement(
     prefix: String,
     sql: String,
-    params: List(Param),
+    params: List(param),
     index: Int,
     dialect: Dialect,
   )
@@ -28,7 +27,7 @@ pub opaque type PreparedStatement {
 pub fn new(
   placeholder_base plchldr_bs: String,
   dialect db_adptr: Dialect,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   plchldr_bs
   |> PreparedStatement(sql: "", params: [], index: 0, dialect: db_adptr)
 }
@@ -37,8 +36,8 @@ pub fn new(
 /// to the parameters list.
 ///
 pub fn append_param(
-  prepared_statement prp_stm: PreparedStatement,
-  param nw_prm: Param,
+  prepared_statement prp_stm: PreparedStatement(param),
+  param nw_prm: param,
 ) {
   let new_sql = prp_stm |> next_placeholder(prp_stm.dialect)
   prp_stm |> append_sql_and_param(new_sql, nw_prm)
@@ -53,7 +52,7 @@ pub fn append_param(
 /// ⛔ ⛔ ⛔
 ///
 pub fn append_sql(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   sql nw_sql: String,
 ) {
   PreparedStatement(..prp_stm, sql: prp_stm.sql <> nw_sql)
@@ -61,34 +60,40 @@ pub fn append_sql(
 
 /// Get the prefix of the prepared statement.
 ///
-pub fn get_prefix(prepared_statement prp_stm: PreparedStatement) -> String {
+pub fn get_prefix(
+  prepared_statement prp_stm: PreparedStatement(param),
+) -> String {
   prp_stm.prefix
 }
 
 /// Get the SQL of the prepared statement.
 ///
-pub fn get_sql(prepared_statement prp_stm: PreparedStatement) -> String {
+pub fn get_sql(prepared_statement prp_stm: PreparedStatement(param)) -> String {
   prp_stm.sql
 }
 
 /// Get the parameters of the prepared statement.
 ///
-pub fn get_params(prepared_statement prp_stm: PreparedStatement) -> List(Param) {
+pub fn get_params(
+  prepared_statement prp_stm: PreparedStatement(param),
+) -> List(param) {
   prp_stm.params
 }
 
 /// Get the dialect of the prepared statement.
 ///
-pub fn get_dialect(prepared_statement prp_stm: PreparedStatement) -> Dialect {
+pub fn get_dialect(
+  prepared_statement prp_stm: PreparedStatement(param),
+) -> Dialect {
   prp_stm.dialect
 }
 
 /// Append SQL and a parameter to the prepared statement.
 ///
 fn append_sql_and_param(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   sql nw_sql: String,
-  param nw_prm: Param,
+  param nw_prm: param,
 ) {
   prp_stm |> append_sql_and_params(sql: nw_sql, params: [nw_prm])
 }
@@ -96,9 +101,9 @@ fn append_sql_and_param(
 /// Append SQL and parameters to the prepared statement.
 ///
 fn append_sql_and_params(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   sql nw_sql: String,
-  params nw_prms: List(Param),
+  params nw_prms: List(param),
 ) {
   PreparedStatement(
     ..prp_stm,
@@ -109,7 +114,7 @@ fn append_sql_and_params(
 }
 
 fn next_placeholder(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   dialect dlct: Dialect,
 ) -> String {
   case dlct {

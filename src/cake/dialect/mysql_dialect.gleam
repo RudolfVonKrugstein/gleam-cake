@@ -11,38 +11,38 @@ import cake/internal/write_query
 // │ type re-exports                                                           │
 // └───────────────────────────────────────────────────────────────────────────┘
 
-pub type CakeQuery(a) =
-  cake.CakeQuery(a)
+pub type CakeQuery(a, param) =
+  cake.CakeQuery(a, param)
 
-pub type PreparedStatement =
-  prepared_statement.PreparedStatement
+pub type PreparedStatement(param) =
+  prepared_statement.PreparedStatement(param)
 
-pub type ReadQuery =
-  read_query.ReadQuery
+pub type ReadQuery(param) =
+  read_query.ReadQuery(param)
 
-pub type WriteQuery(a) =
-  write_query.WriteQuery(a)
+pub type WriteQuery(a, param) =
+  write_query.WriteQuery(a, param)
 
 /// Converts a cake query to a 🐬MySQL prepared statement.
 ///
 pub fn cake_query_to_prepared_statement(
-  query qry: CakeQuery(a),
-) -> PreparedStatement {
+  query qry: CakeQuery(a, param),
+) -> PreparedStatement(param) {
   qry |> cake.to_prepared_statement(dialect: Mysql)
 }
 
 /// Converts read query to a 🐬MySQL prepared statement.
 ///
 pub fn read_query_to_prepared_statement(
-  query qry: ReadQuery,
-) -> PreparedStatement {
+  query qry: ReadQuery(param),
+) -> PreparedStatement(param) {
   qry |> cake.read_query_to_prepared_statement(dialect: Mysql)
 }
 
 /// Converts a write query to a 🐬MySQL prepared statement.
 ///
 pub fn write_query_to_prepared_statement(
-  query qry: WriteQuery(a),
-) -> PreparedStatement {
+  query qry: WriteQuery(a, param),
+) -> PreparedStatement(param) {
   qry |> cake.write_query_to_prepared_statement(dialect: Mysql)
 }

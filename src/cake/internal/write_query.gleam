@@ -10,7 +10,6 @@ import cake/internal/read_query.{
   type Comment, type Epilog, type From, type Joins, type ReadQuery, type Where,
   FromSubQuery, FromTable, NoFrom,
 }
-import cake/param.{type Param}
 import gleam/list
 import gleam/string
 
@@ -25,28 +24,28 @@ import gleam/string
 /// queries, as they can use subqueries to define the data to be written or they
 /// are being utilized for atomic updates or conflict resolution.
 ///
-pub type WriteQuery(a) {
-  InsertQuery(Insert(a))
-  UpdateQuery(Update(a))
-  DeleteQuery(Delete(a))
+pub type WriteQuery(a, param) {
+  InsertQuery(Insert(a, param))
+  UpdateQuery(Update(a, param))
+  DeleteQuery(Delete(a, param))
 }
 
 /// Converts a `WriteQuery` into a `PreparedStatement`.
 ///
 pub fn to_prepared_statement(
-  query qry: WriteQuery(a),
+  query qry: WriteQuery(a, param),
   placeholder_base plchldr_bs: String,
   dialect dlct: Dialect,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   plchldr_bs
   |> prepared_statement.new(dlct)
   |> apply(qry)
 }
 
 fn apply(
-  prepared_statement prp_stm: PreparedStatement,
-  query qry: WriteQuery(a),
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  query qry: WriteQuery(a, param),
+) -> PreparedStatement(param) {
   case qry {
     InsertQuery(insert) -> prp_stm |> insert_apply(insert)
     UpdateQuery(update) -> prp_stm |> update_apply(update)
@@ -67,9 +66,9 @@ pub type Returning {
 }
 
 fn returning_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   returning rtrn: Returning,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   case rtrn {
     NoReturning -> prp_stm
     Returning(columns: cols) ->
@@ -85,14 +84,14 @@ fn returning_apply(
 
 /// Defines an `INSERT` query.
 ///
-pub type Insert(a) {
+pub type Insert(a, param) {
   Insert(
     // with (_recursive?): ?, // v2
     table: InsertIntoTable,
     columns: InsertColumns,
     modifier: InsertModifier,
-    source: InsertSource(a),
-    on_conflict: InsertConflictStrategy(a),
+    source: InsertSource(a, param),
+    on_conflict: InsertConflictStrategy(a, param),
     returning: Returning,
     epilog: Epilog,
     comment: Comment,
@@ -130,25 +129,25 @@ pub type InsertModifier {
 /// - `InsertSourceRows` when a list of rows is provided.
 /// - `InsertSourceQuery` when a query is provided.
 ///
-pub type InsertSource(a) {
+pub type InsertSource(a, param) {
   NoInsertSource
   InsertSourceDefault
-  InsertSourceRecords(records: List(a), encoder: fn(a) -> InsertRow)
-  InsertSourceRows(rows: List(InsertRow))
-  InsertSourceQuery(query: ReadQuery)
+  InsertSourceRecords(records: List(a), encoder: fn(a) -> InsertRow(param))
+  InsertSourceRows(rows: List(InsertRow(param)))
+  InsertSourceQuery(query: ReadQuery(param))
 }
 
 /// The `InsertRow` type is used to define a row to be inserted into a table.
 ///
-pub type InsertRow {
-  InsertRow(row: List(InsertValue))
+pub type InsertRow(param) {
+  InsertRow(row: List(InsertValue(param)))
 }
 
 /// The `InsertValue` type is used to define the values to be inserted into
 /// a table. It can be a parameter or a default value.
 ///
-pub type InsertValue {
-  InsertParam(param: Param)
+pub type InsertValue(param) {
+  InsertParam(param: param)
   InsertDefault
 }
 
@@ -159,13 +158,13 @@ pub type InsertValue {
 /// - `InsertConflictUpdate` is also known as `INSERT OR UPDATE` aka `UPSERT`.
 /// - `InsertConflictIgnore` is also known as `INSERT IGNORE`.
 ///
-pub type InsertConflictStrategy(a) {
+pub type InsertConflictStrategy(a, param) {
   InsertConflictError
-  InsertConflictIgnore(target: InsertConflictTarget, where: Where)
+  InsertConflictIgnore(target: InsertConflictTarget, where: Where(param))
   InsertConflictUpdate(
     target: InsertConflictTarget,
-    where: Where,
-    update: Update(a),
+    where: Where(param),
+    update: Update(a, param),
   )
 }
 
@@ -178,8 +177,8 @@ pub type InsertConflictTarget {
 }
 
 fn insert_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  insert isrt: Insert(a),
+  prepared_statement prp_stm: PreparedStatement(param),
+  insert isrt: Insert(a, param),
 ) {
   prp_stm
   |> insert_into_table_apply(isrt.table)
@@ -193,9 +192,9 @@ fn insert_apply(
 }
 
 fn insert_into_table_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   table_name tbl_nm: InsertIntoTable,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   case tbl_nm {
     NoInsertIntoTable -> prp_stm |> prepared_statement.append_sql("INSERT INTO")
     InsertIntoTable(name: tbl_name) ->
@@ -204,9 +203,9 @@ fn insert_into_table_apply(
 }
 
 fn insert_columns_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   columns cols: InsertColumns,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   case cols {
     NoInsertColumns -> prp_stm
     InsertColumns(columns: cols) ->
@@ -216,9 +215,9 @@ fn insert_columns_apply(
 }
 
 fn insert_modifier_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   insert_modifer isrt_mdfr: InsertModifier,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   case isrt_mdfr {
     NoInsertModifier -> prp_stm
     InsertModifier(modifier: mdfr) ->
@@ -227,9 +226,9 @@ fn insert_modifier_apply(
 }
 
 fn insert_source_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  source src: InsertSource(a),
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  source src: InsertSource(a, param),
+) -> PreparedStatement(param) {
   case src {
     NoInsertSource -> prp_stm
     InsertSourceRecords(records: src, encoder: cstr) ->
@@ -250,16 +249,18 @@ fn insert_source_apply(
 }
 
 fn insert_from_params_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   source src: List(a),
-  row_encoder cstr: fn(a) -> InsertRow,
+  row_encoder cstr: fn(a) -> InsertRow(param),
 ) {
   let prp_stm = prp_stm |> prepared_statement.append_sql(" (")
   let prp_stm =
     src
     |> list.fold(
       prp_stm,
-      fn(new_prp_stm: PreparedStatement, rcrd: a) -> PreparedStatement {
+      fn(new_prp_stm: PreparedStatement(param), rcrd: a) -> PreparedStatement(
+        param,
+      ) {
         let InsertRow(row) = rcrd |> cstr
         case new_prp_stm == prp_stm {
           True -> new_prp_stm |> row_apply(row)
@@ -276,15 +277,17 @@ fn insert_from_params_apply(
 }
 
 fn insert_from_values_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  source src: List(InsertRow),
+  prepared_statement prp_stm: PreparedStatement(param),
+  source src: List(InsertRow(param)),
 ) {
   let prp_stm = prp_stm |> prepared_statement.append_sql(" (")
   let prp_stm =
     src
     |> list.fold(
       prp_stm,
-      fn(new_prp_stm: PreparedStatement, row: InsertRow) -> PreparedStatement {
+      fn(new_prp_stm: PreparedStatement(param), row: InsertRow(param)) -> PreparedStatement(
+        param,
+      ) {
         let InsertRow(row) = row
         case new_prp_stm == prp_stm {
           True -> new_prp_stm |> row_apply(row)
@@ -301,13 +304,16 @@ fn insert_from_values_apply(
 }
 
 fn row_apply(
-  new_prp_stm: PreparedStatement,
-  row: List(InsertValue),
-) -> PreparedStatement {
+  new_prp_stm: PreparedStatement(param),
+  row: List(InsertValue(param)),
+) -> PreparedStatement(param) {
   row
   |> list.fold(
     new_prp_stm,
-    fn(new_prp_stm_inner: PreparedStatement, insert_value: InsertValue) -> PreparedStatement {
+    fn(
+      new_prp_stm_inner: PreparedStatement(param),
+      insert_value: InsertValue(param),
+    ) -> PreparedStatement(param) {
       case insert_value {
         InsertParam(param: param) -> {
           case new_prp_stm_inner == new_prp_stm {
@@ -336,8 +342,8 @@ fn row_apply(
 }
 
 fn insert_from_query_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  query qry: ReadQuery,
+  prepared_statement prp_stm: PreparedStatement(param),
+  query qry: ReadQuery(param),
 ) {
   prp_stm
   |> prepared_statement.append_sql(" (")
@@ -346,8 +352,8 @@ fn insert_from_query_apply(
 }
 
 fn insert_on_conflict_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  on_conflict_strategy on_cnf: InsertConflictStrategy(a),
+  prepared_statement prp_stm: PreparedStatement(param),
+  on_conflict_strategy on_cnf: InsertConflictStrategy(a, param),
 ) {
   case on_cnf {
     InsertConflictError -> prp_stm
@@ -370,7 +376,7 @@ fn insert_on_conflict_apply(
 }
 
 fn insert_on_conflict_target_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   target cflt_trgt: InsertConflictTarget,
 ) {
   case cflt_trgt {
@@ -390,15 +396,15 @@ fn insert_on_conflict_target_apply(
 /// NOTICE: 🐘PostgreSQL and 🪶SQLite only support `JOIN` in `UPDATE` if `FROM`
 /// is also given.
 ///
-pub type Update(a) {
+pub type Update(a, param) {
   Update(
     // with (_recursive?): ?, // v2
     table: UpdateTable,
     modifier: UpdateModifier,
-    set: UpdateSets,
-    from: From,
-    join: Joins,
-    where: Where,
+    set: UpdateSets(param),
+    from: From(param),
+    join: Joins(param),
+    where: Where(param),
     returning: Returning,
     epilog: Epilog,
     comment: Comment,
@@ -421,22 +427,22 @@ pub type UpdateTable {
 
 /// Specifies the columns to `UPDATE` and their values.
 ///
-pub type UpdateSets {
+pub type UpdateSets(param) {
   NoUpdateSets
-  UpdateSets(List(UpdateSet))
+  UpdateSets(List(UpdateSet(param)))
 }
 
 /// Specifies an update set
 ///
-pub type UpdateSet {
-  UpdateParamSet(column: String, param: Param)
+pub type UpdateSet(param) {
+  UpdateParamSet(column: String, param: param)
   UpdateExpressionSet(columns: List(String), expression: String)
-  UpdateSubQuerySet(columns: List(String), query: ReadQuery)
+  UpdateSubQuerySet(columns: List(String), query: ReadQuery(param))
 }
 
 fn update_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  update updt: Update(a),
+  prepared_statement prp_stm: PreparedStatement(param),
+  update updt: Update(a, param),
 ) {
   prp_stm
   |> prepared_statement.append_sql("UPDATE")
@@ -453,9 +459,9 @@ fn update_apply(
 }
 
 fn update_table_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   table_name tbl_nm: UpdateTable,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   case tbl_nm {
     NoUpdateTable -> prp_stm
     UpdateTable(tbl) ->
@@ -465,9 +471,9 @@ fn update_table_apply(
 }
 
 fn update_modifier_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   update_modifier updt_mdfr: UpdateModifier,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   case updt_mdfr {
     NoUpdateModifier -> prp_stm
     UpdateModifier(modifier: mdfr) ->
@@ -476,9 +482,9 @@ fn update_modifier_apply(
 }
 
 fn update_set_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  update_sets updt_sts: UpdateSets,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  update_sets updt_sts: UpdateSets(param),
+) -> PreparedStatement(param) {
   case updt_sts {
     NoUpdateSets -> prp_stm
     UpdateSets(updt_sets) -> prp_stm |> update_sets_apply(updt_sets)
@@ -486,10 +492,13 @@ fn update_set_apply(
 }
 
 fn update_sets_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  update_sets updt_sts: List(UpdateSet),
-) -> PreparedStatement {
-  let columns_apply = fn(new_prp_stm: PreparedStatement, cols: List(String)) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  update_sets updt_sts: List(UpdateSet(param)),
+) -> PreparedStatement(param) {
+  let columns_apply = fn(
+    new_prp_stm: PreparedStatement(param),
+    cols: List(String),
+  ) -> PreparedStatement(param) {
     case cols {
       [] -> new_prp_stm
       [col] -> new_prp_stm |> prepared_statement.append_sql(" " <> col <> " =")
@@ -505,7 +514,9 @@ fn update_sets_apply(
   updt_sts
   |> list.fold(
     prp_stm,
-    fn(new_prp_stm: PreparedStatement, updt_st: UpdateSet) -> PreparedStatement {
+    fn(new_prp_stm: PreparedStatement(param), updt_st: UpdateSet(param)) -> PreparedStatement(
+      param,
+    ) {
       let new_prp_stm = case new_prp_stm == prp_stm {
         True -> new_prp_stm
         False -> new_prp_stm |> prepared_statement.append_sql(",")
@@ -547,14 +558,14 @@ fn update_sets_apply(
 /// clause. In such case you may use a sub-query in a `WHERE` clause, or use a ]
 /// join instead.
 ///
-pub type Delete(a) {
+pub type Delete(a, param) {
   Delete(
     // with (_recursive?): ?, // v2
     modifier: DeleteModifier,
     table: DeleteTable,
-    using: DeleteUsing,
-    join: Joins,
-    where: Where,
+    using: DeleteUsing(param),
+    join: Joins(param),
+    where: Where(param),
     returning: Returning,
     epilog: Epilog,
     comment: Comment,
@@ -577,16 +588,16 @@ pub type DeleteTable {
 
 /// Specifies the `USING` clause for `DELETE`.
 ///
-pub type DeleteUsing {
+pub type DeleteUsing(param) {
   NoDeleteUsing
   // TODO v2 In case From wraps a list in future
   // ... then this should not be a list anymore.
-  DeleteUsing(froms: List(From))
+  DeleteUsing(froms: List(From(param)))
 }
 
 fn delete_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  delete dlt: Delete(a),
+  prepared_statement prp_stm: PreparedStatement(param),
+  delete dlt: Delete(a, param),
 ) {
   prp_stm
   |> prepared_statement.append_sql("DELETE")
@@ -601,9 +612,9 @@ fn delete_apply(
 }
 
 fn delete_table_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   table_name tbl_nm: DeleteTable,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   case tbl_nm {
     NoDeleteTable -> prp_stm
     DeleteTable(tbl) ->
@@ -613,9 +624,9 @@ fn delete_table_apply(
 }
 
 fn delete_modifier_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   delete_modifer updt_mdfr: DeleteModifier,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   case updt_mdfr {
     NoDeleteModifier -> prp_stm
     DeleteModifier(modifier: mdfr) ->
@@ -624,9 +635,9 @@ fn delete_modifier_apply(
 }
 
 fn using_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  using updt_usng: DeleteUsing,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  using updt_usng: DeleteUsing(param),
+) -> PreparedStatement(param) {
   case updt_usng {
     NoDeleteUsing -> prp_stm
     DeleteUsing(froms: frms) -> {
@@ -635,7 +646,9 @@ fn using_apply(
       frms
       |> list.fold(
         prp_stm,
-        fn(new_prp_stm: PreparedStatement, frm: From) -> PreparedStatement {
+        fn(new_prp_stm: PreparedStatement(param), frm: From(param)) -> PreparedStatement(
+          param,
+        ) {
           let new_prp_stm = case new_prp_stm == prp_stm, frm {
             True, _ | _, NoFrom -> new_prp_stm
             False, _ -> new_prp_stm |> prepared_statement.append_sql(", ")

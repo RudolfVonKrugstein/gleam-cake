@@ -22,40 +22,40 @@ pub type Comment =
 pub type Epilog =
   read_query.Epilog
 
-pub type From =
-  read_query.From
+pub type From(param) =
+  read_query.From(param)
 
-pub type Join =
-  read_query.Join
+pub type Join(param) =
+  read_query.Join(param)
 
-pub type Joins =
-  read_query.Joins
+pub type Joins(param) =
+  read_query.Joins(param)
 
-pub type ReadQuery =
-  read_query.ReadQuery
+pub type ReadQuery(param) =
+  read_query.ReadQuery(param)
 
-pub type Where =
-  read_query.Where
+pub type Where(param) =
+  read_query.Where(param)
 
 // ┌───────────────────────────────────────────────────────────────────────────┐
 // │  write_query type re-exports                                              │
 // └───────────────────────────────────────────────────────────────────────────┘
 
-pub type Delete(a) =
-  write_query.Delete(a)
+pub type Delete(a, param) =
+  write_query.Delete(a, param)
 
 pub type DeleteTable =
   write_query.DeleteTable
 
-pub type DeleteUsing =
-  write_query.DeleteUsing
+pub type DeleteUsing(param) =
+  write_query.DeleteUsing(param)
 
-pub type WriteQuery(a) =
-  write_query.WriteQuery(a)
+pub type WriteQuery(a, param) =
+  write_query.WriteQuery(a, param)
 
 /// Creates a `WriteQuery` from a `Delete` query.
 ///
-pub fn to_query(delete dlt: Delete(a)) -> WriteQuery(a) {
+pub fn to_query(delete dlt: Delete(a, param)) -> WriteQuery(a, param) {
   dlt |> DeleteQuery
 }
 
@@ -63,7 +63,7 @@ pub fn to_query(delete dlt: Delete(a)) -> WriteQuery(a) {
 
 /// Creates an empty `Delete` query.
 ///
-pub fn new() -> Delete(a) {
+pub fn new() -> Delete(a, param) {
   Delete(
     modifier: NoDeleteModifier,
     table: NoDeleteTable,
@@ -80,7 +80,10 @@ pub fn new() -> Delete(a) {
 
 /// Sets the `DELETE` modifier.
 ///
-pub fn modifier(delete dlt: Delete(a), modifier mdfr: String) -> Delete(a) {
+pub fn modifier(
+  delete dlt: Delete(a, param),
+  modifier mdfr: String,
+) -> Delete(a, param) {
   let mdfr = mdfr |> string.trim
   case mdfr {
     "" -> Delete(..dlt, modifier: NoDeleteModifier)
@@ -90,13 +93,13 @@ pub fn modifier(delete dlt: Delete(a), modifier mdfr: String) -> Delete(a) {
 
 /// Removes the `DELETE` modifier.
 ///
-pub fn no_modifier(delete dlt: Delete(a)) -> Delete(a) {
+pub fn no_modifier(delete dlt: Delete(a, param)) -> Delete(a, param) {
   Delete(..dlt, modifier: NoDeleteModifier)
 }
 
 /// Gets the `DELETE` modifier.
 ///
-pub fn get_modifier(delete dlt: Delete(a)) -> String {
+pub fn get_modifier(delete dlt: Delete(a, param)) -> String {
   case dlt.modifier {
     NoDeleteModifier -> ""
     DeleteModifier(mdfr) -> mdfr
@@ -108,19 +111,22 @@ pub fn get_modifier(delete dlt: Delete(a)) -> String {
 /// Sets the table name of the `Delete` query, aka the table where
 /// the rows will be deleted from.
 ///
-pub fn table(delete dlt: Delete(a), table_name tbl_nm: String) -> Delete(a) {
+pub fn table(
+  delete dlt: Delete(a, param),
+  table_name tbl_nm: String,
+) -> Delete(a, param) {
   Delete(..dlt, table: tbl_nm |> DeleteTable)
 }
 
 /// Removes the table name from the `Delete` query.
 ///
-pub fn no_table(delete dlt: Delete(a)) -> Delete(a) {
+pub fn no_table(delete dlt: Delete(a, param)) -> Delete(a, param) {
   Delete(..dlt, table: NoDeleteTable)
 }
 
 /// Gets the table name of the `Delete` query.
 ///
-pub fn get_table(delete dlt: Delete(a)) -> DeleteTable {
+pub fn get_table(delete dlt: Delete(a, param)) -> DeleteTable {
   dlt.table
 }
 
@@ -141,9 +147,9 @@ pub fn get_table(delete dlt: Delete(a)) -> DeleteTable {
 /// `DELETE * FROM a USING a, b, WHERE a.b_id = b.id;`
 ///
 pub fn using_table(
-  delete dlt: Delete(a),
+  delete dlt: Delete(a, param),
   table_name tbl_nm: String,
-) -> Delete(a) {
+) -> Delete(a, param) {
   case dlt.using {
     NoDeleteUsing -> Delete(..dlt, using: [tbl_nm |> FromTable] |> DeleteUsing)
     DeleteUsing(dlt_usngs) ->
@@ -172,10 +178,10 @@ pub fn using_table(
 /// instead.
 ///
 pub fn using_sub_query(
-  delete dlt: Delete(a),
-  query qry: ReadQuery,
+  delete dlt: Delete(a, param),
+  query qry: ReadQuery(param),
   alias als: String,
-) -> Delete(a) {
+) -> Delete(a, param) {
   case dlt.using {
     NoDeleteUsing ->
       Delete(..dlt, using: [qry |> FromSubQuery(alias: als)] |> DeleteUsing)
@@ -192,9 +198,9 @@ pub fn using_sub_query(
 /// Replaces the `USING` clause of the `Delete` query with a table.
 ///
 pub fn replace_using_table(
-  delete dlt: Delete(a),
+  delete dlt: Delete(a, param),
   table_name tbl_nm: String,
-) -> Delete(a) {
+) -> Delete(a, param) {
   case dlt.using {
     NoDeleteUsing -> Delete(..dlt, using: [tbl_nm |> FromTable] |> DeleteUsing)
     DeleteUsing(_) -> Delete(..dlt, using: [tbl_nm |> FromTable] |> DeleteUsing)
@@ -204,10 +210,10 @@ pub fn replace_using_table(
 /// Replaces the `USING` clause of the `Delete` query with a sub-query.
 ///
 pub fn replace_using_sub_query(
-  delete dlt: Delete(a),
-  query qry: ReadQuery,
+  delete dlt: Delete(a, param),
+  query qry: ReadQuery(param),
   alias als: String,
-) -> Delete(a) {
+) -> Delete(a, param) {
   case dlt.using {
     NoDeleteUsing ->
       Delete(..dlt, using: [qry |> FromSubQuery(alias: als)] |> DeleteUsing)
@@ -218,13 +224,13 @@ pub fn replace_using_sub_query(
 
 /// Removes the `USING` clause from the `Delete` query.
 ///
-pub fn no_using(delete dlt: Delete(a)) -> Delete(a) {
+pub fn no_using(delete dlt: Delete(a, param)) -> Delete(a, param) {
   Delete(..dlt, using: NoDeleteUsing)
 }
 
 /// Gets the `USING` clause of the `Delete` query.
 ///
-pub fn get_using(delete dlt: Delete(a)) -> List(From) {
+pub fn get_using(delete dlt: Delete(a, param)) -> List(From(param)) {
   case dlt.using {
     NoDeleteUsing -> []
     DeleteUsing(usng) -> usng
@@ -238,7 +244,10 @@ pub fn get_using(delete dlt: Delete(a)) -> List(From) {
 /// NOTICE: On 🐘PostgreSQL and 🪶SQLite `Joins` are only allowed if the `FROM`
 /// clause is set as well.
 ///
-pub fn join(delete dlt: Delete(a), join jn: Join) -> Delete(a) {
+pub fn join(
+  delete dlt: Delete(a, param),
+  join jn: Join(param),
+) -> Delete(a, param) {
   case dlt.join {
     Joins(jns) -> Delete(..dlt, join: jns |> list.append([jn]) |> Joins)
     NoJoins -> Delete(..dlt, join: [jn] |> Joins)
@@ -250,7 +259,10 @@ pub fn join(delete dlt: Delete(a), join jn: Join) -> Delete(a) {
 /// NOTICE: On 🐘PostgreSQL and 🪶SQLite `Joins` are only allowed if the `FROM`
 /// clause is set as well.
 ///
-pub fn replace_join(delete dlt: Delete(a), join jn: Join) -> Delete(a) {
+pub fn replace_join(
+  delete dlt: Delete(a, param),
+  join jn: Join(param),
+) -> Delete(a, param) {
   Delete(..dlt, join: [jn] |> Joins)
 }
 
@@ -259,7 +271,10 @@ pub fn replace_join(delete dlt: Delete(a), join jn: Join) -> Delete(a) {
 /// NOTICE: On 🐘PostgreSQL and 🪶SQLite `Joins` are only allowed if the `FROM`
 /// clause is set as well.
 ///
-pub fn joins(delete dlt: Delete(a), joins jns: List(Join)) -> Delete(a) {
+pub fn joins(
+  delete dlt: Delete(a, param),
+  joins jns: List(Join(param)),
+) -> Delete(a, param) {
   case jns, dlt.join {
     [], _ -> Delete(..dlt, join: jns |> Joins)
     jns, Joins(dlt_joins) ->
@@ -273,19 +288,22 @@ pub fn joins(delete dlt: Delete(a), joins jns: List(Join)) -> Delete(a) {
 /// NOTICE: On 🐘PostgreSQL and 🪶SQLite `Joins` are only allowed if the `FROM`
 /// clause is set as well.
 ///
-pub fn replace_joins(delete dlt: Delete(a), joins jns: List(Join)) -> Delete(a) {
+pub fn replace_joins(
+  delete dlt: Delete(a, param),
+  joins jns: List(Join(param)),
+) -> Delete(a, param) {
   Delete(..dlt, join: jns |> Joins)
 }
 
 /// Removes any `Joins` from the `Delete` query.
 ///
-pub fn no_join(delete dlt: Delete(a)) -> Delete(a) {
+pub fn no_join(delete dlt: Delete(a, param)) -> Delete(a, param) {
   Delete(..dlt, join: NoJoins)
 }
 
 /// Gets the `Joins` of the `Delete` query.
 ///
-pub fn get_joins(delete dlt: Delete(a)) -> Joins {
+pub fn get_joins(delete dlt: Delete(a, param)) -> Joins(param) {
   dlt.join
 }
 
@@ -300,7 +318,10 @@ pub fn get_joins(delete dlt: Delete(a)) -> Joins {
 /// - If the outermost `Where` is any other kind of `Where`, this and the
 ///   current outermost `Where` are wrapped in an `AndWhere`.
 ///
-pub fn where(delete dlt: Delete(a), where whr: Where) -> Delete(a) {
+pub fn where(
+  delete dlt: Delete(a, param),
+  where whr: Where(param),
+) -> Delete(a, param) {
   case dlt.where {
     NoWhere -> Delete(..dlt, where: whr)
     AndWhere(wheres) ->
@@ -318,7 +339,10 @@ pub fn where(delete dlt: Delete(a), where whr: Where) -> Delete(a) {
 /// - If the outermost `Where` is any other kind of `Where`, this and the
 ///   current outermost `Where` are wrapped in an `OrWhere`.
 ///
-pub fn or_where(delete dlt: Delete(a), where whr: Where) -> Delete(a) {
+pub fn or_where(
+  delete dlt: Delete(a, param),
+  where whr: Where(param),
+) -> Delete(a, param) {
   case dlt.where {
     NoWhere -> Delete(..dlt, where: whr)
     OrWhere(wheres) ->
@@ -341,7 +365,10 @@ pub fn or_where(delete dlt: Delete(a), where whr: Where) -> Delete(a) {
 ///
 /// NOTICE: This operator exists in 🦭MariaDB and 🐬MySQL, nativly.
 ///
-pub fn xor_where(delete dlt: Delete(a), where whr: Where) -> Delete(a) {
+pub fn xor_where(
+  delete dlt: Delete(a, param),
+  where whr: Where(param),
+) -> Delete(a, param) {
   case dlt.where {
     NoWhere -> Delete(..dlt, where: whr)
     XorWhere(wheres) ->
@@ -352,19 +379,22 @@ pub fn xor_where(delete dlt: Delete(a), where whr: Where) -> Delete(a) {
 
 /// Replaces the `Where` in the `Delete` query.
 ///
-pub fn replace_where(delete dlt: Delete(a), where whr: Where) -> Delete(a) {
+pub fn replace_where(
+  delete dlt: Delete(a, param),
+  where whr: Where(param),
+) -> Delete(a, param) {
   Delete(..dlt, where: whr)
 }
 
 /// Removes the `Where` from the `Delete` query.
 ///
-pub fn no_where(delete dlt: Delete(a)) -> Delete(a) {
+pub fn no_where(delete dlt: Delete(a, param)) -> Delete(a, param) {
   Delete(..dlt, where: NoWhere)
 }
 
 /// Gets the `Where` of the `Delete` query.
 ///
-pub fn get_where(delete dlt: Delete(a)) -> Where {
+pub fn get_where(delete dlt: Delete(a, param)) -> Where(param) {
   dlt.where
 }
 
@@ -373,9 +403,9 @@ pub fn get_where(delete dlt: Delete(a)) -> Where {
 /// Specify the columns to return after the `Delete` query.
 ///
 pub fn returning(
-  delete dlt: Delete(a),
+  delete dlt: Delete(a, param),
   returning rtrn: List(String),
-) -> Delete(a) {
+) -> Delete(a, param) {
   case rtrn {
     [] -> Delete(..dlt, returning: NoReturning)
     _ -> Delete(..dlt, returning: rtrn |> Returning)
@@ -384,7 +414,7 @@ pub fn returning(
 
 /// Specify that no columns should be returned after the `Delete` query.
 ///
-pub fn no_returning(delete dlt: Delete(a)) -> Delete(a) {
+pub fn no_returning(delete dlt: Delete(a, param)) -> Delete(a, param) {
   Delete(..dlt, returning: NoReturning)
 }
 
@@ -392,7 +422,10 @@ pub fn no_returning(delete dlt: Delete(a)) -> Delete(a) {
 
 /// Specify an epilog for the `Delete` query.
 ///
-pub fn epilog(delete dlt: Delete(a), epilog eplg: String) -> Delete(a) {
+pub fn epilog(
+  delete dlt: Delete(a, param),
+  epilog eplg: String,
+) -> Delete(a, param) {
   let eplg = eplg |> string.trim
   case eplg {
     "" -> Delete(..dlt, epilog: NoEpilog)
@@ -402,13 +435,13 @@ pub fn epilog(delete dlt: Delete(a), epilog eplg: String) -> Delete(a) {
 
 /// Specify that no epilog should be added to the `Delete` query.
 ///
-pub fn no_epilog(delete dlt: Delete(a)) -> Delete(a) {
+pub fn no_epilog(delete dlt: Delete(a, param)) -> Delete(a, param) {
   Delete(..dlt, epilog: NoEpilog)
 }
 
 /// Get the epilog from an `Delete` query.
 ///
-pub fn get_epilog(delete dlt: Delete(a)) -> Epilog {
+pub fn get_epilog(delete dlt: Delete(a, param)) -> Epilog {
   dlt.epilog
 }
 
@@ -416,7 +449,10 @@ pub fn get_epilog(delete dlt: Delete(a)) -> Epilog {
 
 /// Specify a comment for the `Delete` query.
 ///
-pub fn comment(delete dlt: Delete(a), comment cmmnt: String) -> Delete(a) {
+pub fn comment(
+  delete dlt: Delete(a, param),
+  comment cmmnt: String,
+) -> Delete(a, param) {
   let cmmnt = cmmnt |> string.trim
   case cmmnt {
     "" -> Delete(..dlt, comment: NoComment)
@@ -426,12 +462,12 @@ pub fn comment(delete dlt: Delete(a), comment cmmnt: String) -> Delete(a) {
 
 /// Specify that no comment should be added to the `Delete` query.
 ///
-pub fn no_comment(delete dlt: Delete(a)) -> Delete(a) {
+pub fn no_comment(delete dlt: Delete(a, param)) -> Delete(a, param) {
   Delete(..dlt, comment: NoComment)
 }
 
 /// Get the comment from an `Delete` query.
 ///
-pub fn get_comment(delete dlt: Delete(a)) -> Comment {
+pub fn get_comment(delete dlt: Delete(a, param)) -> Comment {
   dlt.comment
 }

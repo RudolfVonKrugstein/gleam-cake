@@ -35,7 +35,6 @@
 
 import cake/internal/dialect.{type Dialect, Maria, Mysql, Postgres, Sqlite}
 import cake/internal/prepared_statement.{type PreparedStatement}
-import cake/param.{type Param, StringParam}
 import gleam/int
 import gleam/list
 import gleam/order
@@ -54,18 +53,18 @@ pub const computed_alias_prefix = "__cake_computed_alias_"
 /// A combined query is a query that combines multiple `SELECT` queries into one
 /// query using `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT`, etc.
 ///
-pub type ReadQuery {
-  SelectQuery(query: Select)
-  CombinedQuery(query: Combined)
+pub type ReadQuery(param) {
+  SelectQuery(query: Select(param))
+  CombinedQuery(query: Combined(param))
 }
 
 /// Creates a prepared statement from a query.
 ///
 pub fn to_prepared_statement(
-  query qry: ReadQuery,
+  query qry: ReadQuery(param),
   placeholder_base plchldr_bs: String,
   dialect dlct: Dialect,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   plchldr_bs
   |> prepared_statement.new(dialect: dlct)
   |> apply(qry)
@@ -74,9 +73,9 @@ pub fn to_prepared_statement(
 /// Applies a query to a prepared statement.
 ///
 pub fn apply(
-  prepared_statement prp_stm: PreparedStatement,
-  query qry: ReadQuery,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  query qry: ReadQuery(param),
+) -> PreparedStatement(param) {
   case qry {
     SelectQuery(query: qry) -> prp_stm |> select_builder(qry)
     CombinedQuery(query: qry) -> prp_stm |> combined_builder(qry)
@@ -88,9 +87,9 @@ pub fn apply(
 // └───────────────────────────────────────────────────────────────────────────┘
 
 fn combined_builder(
-  prepared_statement prp_stm: PreparedStatement,
-  combined_query qry: Combined,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  combined_query qry: Combined(param),
+) -> PreparedStatement(param) {
   prp_stm
   |> combined_clause_apply(qry)
   |> order_by_clause_apply(qry.order_by)
@@ -103,9 +102,9 @@ fn combined_builder(
 /// Applies a combined query to a prepared statement.
 ///
 pub fn combined_clause_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  combined_query qry: Combined,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  combined_query qry: Combined(param),
+) -> PreparedStatement(param) {
   let sql_command = case qry.kind {
     UnionDistinct -> "UNION"
     UnionAll -> "UNION ALL"
@@ -129,14 +128,19 @@ pub fn combined_clause_apply(
   // LIMIT 1
   // ```
 
-  let open_nested_query = fn(prp_stm: PreparedStatement) -> PreparedStatement {
+  let open_nested_query = fn(prp_stm: PreparedStatement(param)) -> PreparedStatement(
+    param,
+  ) {
     case prp_stm |> prepared_statement.get_dialect {
       Sqlite -> prp_stm |> prepared_statement.append_sql("SELECT * FROM (")
       _ -> prp_stm |> prepared_statement.append_sql("(")
     }
   }
 
-  let close_nested_query = fn(prp_stm: PreparedStatement, nested_index: Int) -> PreparedStatement {
+  let close_nested_query = fn(
+    prp_stm: PreparedStatement(param),
+    nested_index: Int,
+  ) -> PreparedStatement(param) {
     case prp_stm |> prepared_statement.get_dialect {
       Sqlite ->
         prp_stm
@@ -152,8 +156,8 @@ pub fn combined_clause_apply(
     qry.queries
     |> list.fold(
       #(prp_stm, 0),
-      fn(acc: #(PreparedStatement, Int), qry: Select) -> #(
-        PreparedStatement,
+      fn(acc: #(PreparedStatement(param), Int), qry: Select(param)) -> #(
+        PreparedStatement(param),
         Int,
       ) {
         let #(new_prp_stm, nested_index) = acc
@@ -178,13 +182,13 @@ pub fn combined_clause_apply(
 
 /// A combined query.
 ///
-pub type Combined {
+pub type Combined(param) {
   Combined(
     kind: CombinedQueryKind,
-    queries: List(Select),
+    queries: List(Select(param)),
     limit: Limit,
     offset: Offset,
-    order_by: OrderBy,
+    order_by: OrderBy(param),
     epilog: Epilog,
     comment: Comment,
   )
@@ -209,8 +213,8 @@ pub type CombinedQueryKind {
 ///
 pub fn combined_query_new(
   kind knd: CombinedQueryKind,
-  queries qrys: List(Select),
-) -> Combined {
+  queries qrys: List(Select(param)),
+) -> Combined(param) {
   qrys
   |> Combined(
     kind: knd,
@@ -225,10 +229,10 @@ pub fn combined_query_new(
 /// Sets or appends an `ORDER BY` clause to a combined query.
 ///
 pub fn combined_order_by(
-  query qry: Combined,
-  by ordb: OrderBy,
+  query qry: Combined(param),
+  by ordb: OrderBy(param),
   append appnd: Bool,
-) -> Combined {
+) -> Combined(param) {
   case appnd {
     True -> Combined(..qry, order_by: qry.order_by |> order_by_append(ordb))
     False -> Combined(..qry, order_by: ordb)
@@ -240,9 +244,9 @@ pub fn combined_order_by(
 // └───────────────────────────────────────────────────────────────────────────┘
 
 fn select_builder(
-  prepared_statement prp_stm: PreparedStatement,
-  select_query qry: Select,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  select_query qry: Select(param),
+) -> PreparedStatement(param) {
   prp_stm
   |> select_clause_apply(qry.kind, qry.select)
   |> from_clause_apply(qry.from)
@@ -266,18 +270,18 @@ pub type SelectKind {
 
 /// A `SELECT` query.
 ///
-pub type Select {
+pub type Select(param) {
   Select(
     // with (_recursive?): ?, // v2
     kind: SelectKind,
-    select: Selects,
+    select: Selects(param),
     // window: ?, // v2
-    from: From,
-    join: Joins,
-    where: Where,
+    from: From(param),
+    join: Joins(param),
+    where: Where(param),
     group_by: GroupBy,
-    having: Where,
-    order_by: OrderBy,
+    having: Where(param),
+    order_by: OrderBy(param),
     limit: Limit,
     offset: Offset,
     epilog: Epilog,
@@ -288,10 +292,10 @@ pub type Select {
 /// Sets or append an `ORDER BY` clause to a `SELECT` query.
 ///
 pub fn select_order_by(
-  select_query qry: Select,
-  by ordb: OrderBy,
+  select_query qry: Select(param),
+  by ordb: OrderBy(param),
   append appnd: Bool,
-) -> Select {
+) -> Select(param) {
   case appnd {
     True -> Select(..qry, order_by: qry.order_by |> order_by_append(ordb))
     False -> Select(..qry, order_by: ordb)
@@ -306,9 +310,9 @@ pub fn select_order_by(
 ///
 /// If no columns are selected, all columns are returned, aka `SELECT *`.
 ///
-pub type Selects {
+pub type Selects(param) {
   NoSelects
-  Selects(List(SelectValue))
+  Selects(List(SelectValue(param)))
 }
 
 /// A value that can be selected in a `SELECT` query.
@@ -317,19 +321,19 @@ pub type Selects {
 /// TODO v2 Investigate -> probably makes no sense to have params/values in
 /// SELECT?
 ///
-pub type SelectValue {
+pub type SelectValue(param) {
   SelectColumn(column: String)
   // TODO v2 Investigate -> probably makes no sense to have params in SELECT?
-  SelectParam(param: Param)
-  SelectFragment(fragment: Fragment)
-  SelectAlias(value: SelectValue, alias: String)
+  SelectParam(param: param)
+  SelectFragment(fragment: Fragment(param))
+  SelectAlias(value: SelectValue(param), alias: String)
 }
 
 fn select_clause_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   kind knd: SelectKind,
-  selects slcts: Selects,
-) -> PreparedStatement {
+  selects slcts: Selects(param),
+) -> PreparedStatement(param) {
   let select_command = case knd {
     SelectAll -> "SELECT"
     SelectDistinct -> "SELECT DISTINCT"
@@ -346,7 +350,9 @@ fn select_clause_apply(
           vs
           |> list.fold(
             prp_stm,
-            fn(new_prp_stm: PreparedStatement, v: SelectValue) -> PreparedStatement {
+            fn(new_prp_stm: PreparedStatement(param), v: SelectValue(param)) -> PreparedStatement(
+              param,
+            ) {
               case new_prp_stm == prp_stm {
                 True -> new_prp_stm |> select_value_apply(v)
                 False ->
@@ -363,9 +369,9 @@ fn select_clause_apply(
 }
 
 fn select_value_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  value v: SelectValue,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  value v: SelectValue(param),
+) -> PreparedStatement(param) {
   case v {
     SelectColumn(col) -> prp_stm |> prepared_statement.append_sql(col)
     SelectParam(prm) -> prp_stm |> prepared_statement.append_param(prm)
@@ -383,7 +389,7 @@ fn select_value_apply(
 
 /// Describes the `FROM` clause of SQL queries.
 ///
-pub type From {
+pub type From(param) {
   NoFrom
   // TODO v2 Check if the table or view does indeed exist
   // => should be a function somewhere but not here
@@ -392,15 +398,15 @@ pub type From {
   // TODO v2 FromSubQuery(sub_queries: List(#(sub_query: ReadQuery, alias: String)))
   // interfacing functions should exist to specify a single item or a list
   FromTable(name: String)
-  FromSubQuery(query: ReadQuery, alias: String)
+  FromSubQuery(query: ReadQuery(param), alias: String)
 }
 
 /// Applies the `FROM` clause to a prepared statement by appending the SQL code.
 ///
 pub fn from_clause_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  from frm: From,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  from frm: From(param),
+) -> PreparedStatement(param) {
   case frm {
     NoFrom -> prp_stm
     FromTable(tbl_nm) ->
@@ -425,38 +431,42 @@ pub fn from_clause_apply(
 /// - `ALL` (`WhereAny*`) and,
 /// - `SIMILAR TO (WhereSimilarTo)`
 ///
-pub type Where {
+pub type Where(param) {
   NoWhere
-  NotWhere(where: Where)
-  AndWhere(wheres: List(Where))
-  OrWhere(wheres: List(Where))
-  XorWhere(wheres: List(Where))
-  WhereIsBool(value: WhereValue, bool: Bool)
-  WhereIsNotBool(value: WhereValue, bool: Bool)
-  WhereIsNull(value: WhereValue)
-  WhereIsNotNull(value: WhereValue)
+  NotWhere(where: Where(param))
+  AndWhere(wheres: List(Where(param)))
+  OrWhere(wheres: List(Where(param)))
+  XorWhere(wheres: List(Where(param)))
+  WhereIsBool(value: WhereValue(param), bool: Bool)
+  WhereIsNotBool(value: WhereValue(param), bool: Bool)
+  WhereIsNull(value: WhereValue(param))
+  WhereIsNotNull(value: WhereValue(param))
   WhereComparison(
-    value_a: WhereValue,
+    value_a: WhereValue(param),
     operator: WhereComparisonOperator,
-    value_b: WhereValue,
+    value_b: WhereValue(param),
   )
   WhereAnyOfSubQuery(
-    value_a: WhereValue,
+    value_a: WhereValue(param),
     operator: WhereComparisonOperator,
-    query: ReadQuery,
+    query: ReadQuery(param),
   )
   WhereAllOfSubQuery(
-    value_a: WhereValue,
+    value_a: WhereValue(param),
     operator: WhereComparisonOperator,
-    query: ReadQuery,
+    query: ReadQuery(param),
   )
-  WhereIn(value: WhereValue, values: List(WhereValue))
-  WhereExistsInSubQuery(query: ReadQuery)
-  WhereBetween(value_a: WhereValue, value_b: WhereValue, value_c: WhereValue)
-  WhereLike(value: WhereValue, pattern: String)
-  WhereILike(value: WhereValue, pattern: String)
-  WhereSimilarTo(value: WhereValue, pattern: String, escape_char: String)
-  WhereFragment(fragment: Fragment)
+  WhereIn(value: WhereValue(param), values: List(WhereValue(param)))
+  WhereExistsInSubQuery(query: ReadQuery(param))
+  WhereBetween(
+    value_a: WhereValue(param),
+    value_b: WhereValue(param),
+    value_c: WhereValue(param),
+  )
+  WhereLike(value: WhereValue(param), pattern: param)
+  WhereILike(value: WhereValue(param), pattern: param)
+  WhereSimilarTo(value: WhereValue(param), pattern: param, escape_char: String)
+  WhereFragment(fragment: Fragment(param))
 }
 
 /// Describes the comparison operators for the `WHERE` clause of SQL queries.
@@ -472,10 +482,10 @@ pub type WhereComparisonOperator {
 
 /// Describes the values for the `WHERE` clause of SQL queries.
 ///
-pub type WhereValue {
+pub type WhereValue(param) {
   WhereColumnValue(column: String)
-  WhereParamValue(param: Param)
-  WhereFragmentValue(fragment: Fragment)
+  WhereParamValue(param: param)
+  WhereFragmentValue(fragment: Fragment(param))
   // NOTICE: For some commands, the return value must be scalar:
   // e.g. a result of 1 column, 1 row (LIMIT 1, and a single
   // projection aka SELECT value)
@@ -483,16 +493,16 @@ pub type WhereValue {
   // TODO v3 If there are multiple, take the list of select values (projections)
   // and return the last one, if there is none, return NULL
   // And also potentially apply LIMIT 1?
-  WhereSubQueryValue(query: ReadQuery)
+  WhereSubQueryValue(query: ReadQuery(param))
 }
 
 /// Applies the `WHERE` clause to a prepared statement by appending the SQL
 /// code.
 ///
 pub fn where_clause_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  where wh: Where,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  where wh: Where(param),
+) -> PreparedStatement(param) {
   case wh {
     NoWhere -> prp_stm
     _ -> prp_stm |> prepared_statement.append_sql(" WHERE ") |> where_apply(wh)
@@ -500,9 +510,9 @@ pub fn where_clause_apply(
 }
 
 fn having_clause_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  where wh: Where,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  where wh: Where(param),
+) -> PreparedStatement(param) {
   case wh {
     NoWhere -> prp_stm
     _ -> prp_stm |> prepared_statement.append_sql(" HAVING ") |> where_apply(wh)
@@ -510,9 +520,9 @@ fn having_clause_apply(
 }
 
 fn where_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  where wh: Where,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  where wh: Where(param),
+) -> PreparedStatement(param) {
   case wh {
     NoWhere -> prp_stm
     AndWhere(whs) -> prp_stm |> where_logical_operator_apply("AND", whs, False)
@@ -600,35 +610,23 @@ fn where_apply(
       |> where_sub_query_apply(qry)
     WhereLike(val, prm) ->
       prp_stm
-      |> where_comparison_apply(
-        val,
-        "LIKE",
-        prm |> StringParam |> WhereParamValue,
-      )
+      |> where_comparison_apply(val, "LIKE", prm |> WhereParamValue)
     WhereILike(value: val, pattern: prm) ->
       prp_stm
-      |> where_comparison_apply(
-        val,
-        "ILIKE",
-        prm |> StringParam |> WhereParamValue,
-      )
+      |> where_comparison_apply(val, "ILIKE", prm |> WhereParamValue)
     WhereSimilarTo(value: val, pattern: prm, escape_char: ecp_chr) ->
       prp_stm
-      |> where_comparison_apply(
-        val,
-        "SIMILAR TO",
-        prm |> StringParam |> WhereParamValue,
-      )
+      |> where_comparison_apply(val, "SIMILAR TO", prm |> WhereParamValue)
       |> prepared_statement.append_sql(" ESCAPE '" <> ecp_chr <> "'")
     WhereFragment(fragment) -> prp_stm |> fragment_apply(fragment)
   }
 }
 
 fn where_literal_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  value v: WhereValue,
+  prepared_statement prp_stm: PreparedStatement(param),
+  value v: WhereValue(param),
   literal lt: String,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   case v {
     WhereColumnValue(col) ->
       prp_stm |> prepared_statement.append_sql(col <> " " <> lt)
@@ -645,11 +643,11 @@ fn where_literal_apply(
 }
 
 fn where_comparison_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  value_a val_a: WhereValue,
+  prepared_statement prp_stm: PreparedStatement(param),
+  value_a val_a: WhereValue(param),
   operator oprtr: String,
-  value_b val_b: WhereValue,
-) -> PreparedStatement {
+  value_b val_b: WhereValue(param),
+) -> PreparedStatement(param) {
   case val_a, val_b {
     WhereColumnValue(col_a), WhereColumnValue(col_b) ->
       prp_stm
@@ -727,23 +725,23 @@ fn where_comparison_apply(
 }
 
 fn where_string_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   string s: String,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   prp_stm |> prepared_statement.append_sql(s)
 }
 
 fn where_param_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  param prm: Param,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  param prm: param,
+) -> PreparedStatement(param) {
   prp_stm |> prepared_statement.append_param(prm)
 }
 
 fn where_sub_query_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  sub_query qry: ReadQuery,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  sub_query qry: ReadQuery(param),
+) -> PreparedStatement(param) {
   prp_stm
   |> prepared_statement.append_sql("(")
   |> apply(qry)
@@ -751,11 +749,11 @@ fn where_sub_query_apply(
 }
 
 fn where_logical_operator_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   operator oprtr: String,
-  where whs: List(Where),
+  where whs: List(Where(param)),
   wrap_in_parentheses wrp_prns: Bool,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   let prp_stm = case wrp_prns {
     True -> prp_stm |> prepared_statement.append_sql("(")
     False -> prp_stm
@@ -765,7 +763,9 @@ fn where_logical_operator_apply(
     whs
     |> list.fold(
       prp_stm,
-      fn(new_prp_stm: PreparedStatement, wh: Where) -> PreparedStatement {
+      fn(new_prp_stm: PreparedStatement(param), wh: Where(param)) -> PreparedStatement(
+        param,
+      ) {
         case new_prp_stm == prp_stm {
           True -> new_prp_stm |> where_apply(wh)
           False ->
@@ -785,9 +785,9 @@ fn where_logical_operator_apply(
 }
 
 fn where_xor_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  where whs: List(Where),
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  where whs: List(Where(param)),
+) -> PreparedStatement(param) {
   case prp_stm |> prepared_statement.get_dialect {
     Postgres | Sqlite -> custom_where_xor_apply(prp_stm, whs)
     Maria | Mysql -> vanilla_where_xor_apply(prp_stm, whs)
@@ -795,9 +795,9 @@ fn where_xor_apply(
 }
 
 fn custom_where_xor_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  where whs: List(Where),
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  where whs: List(Where(param)),
+) -> PreparedStatement(param) {
   let xor_idxs = whs |> list.length |> int.subtract(1) |> list.range(0, _)
 
   let prp_stm = prp_stm |> prepared_statement.append_sql("(")
@@ -806,7 +806,9 @@ fn custom_where_xor_apply(
     xor_idxs
     |> list.fold(
       prp_stm,
-      fn(new_prp_stm: PreparedStatement, xor_idx: Int) -> PreparedStatement {
+      fn(new_prp_stm: PreparedStatement(param), xor_idx: Int) -> PreparedStatement(
+        param,
+      ) {
         let new_prp_stm = case new_prp_stm == prp_stm {
           True -> new_prp_stm
           False -> new_prp_stm |> prepared_statement.append_sql(") OR (")
@@ -816,8 +818,8 @@ fn custom_where_xor_apply(
           whs
           |> list.fold(
             #(new_prp_stm, 0),
-            fn(acc: #(PreparedStatement, Int), wh: Where) -> #(
-              PreparedStatement,
+            fn(acc: #(PreparedStatement(param), Int), wh: Where(param)) -> #(
+              PreparedStatement(param),
               Int,
             ) {
               let #(new_prp_stm_per_xor, wh_idx) = acc
@@ -854,15 +856,17 @@ fn custom_where_xor_apply(
 }
 
 fn vanilla_where_xor_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  where whs: List(Where),
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  where whs: List(Where(param)),
+) -> PreparedStatement(param) {
   let prp_stm = prp_stm |> prepared_statement.append_sql("(")
 
   whs
   |> list.fold(
     prp_stm,
-    fn(new_prp_stm: PreparedStatement, wh: Where) -> PreparedStatement {
+    fn(new_prp_stm: PreparedStatement(param), wh: Where(param)) -> PreparedStatement(
+      param,
+    ) {
       case new_prp_stm == prp_stm {
         True -> new_prp_stm |> where_apply(wh)
         False ->
@@ -876,10 +880,10 @@ fn vanilla_where_xor_apply(
 }
 
 fn where_value_in_values_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  value val: WhereValue,
-  parameters prms: List(WhereValue),
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  value val: WhereValue(param),
+  parameters prms: List(WhereValue(param)),
+) -> PreparedStatement(param) {
   let prp_stm =
     case val {
       WhereColumnValue(col) -> prp_stm |> prepared_statement.append_sql(col)
@@ -892,7 +896,9 @@ fn where_value_in_values_apply(
   prms
   |> list.fold(
     prp_stm,
-    fn(new_prp_stm: PreparedStatement, v: WhereValue) -> PreparedStatement {
+    fn(new_prp_stm: PreparedStatement(param), v: WhereValue(param)) -> PreparedStatement(
+      param,
+    ) {
       case v {
         WhereColumnValue(col) ->
           case new_prp_stm == prp_stm {
@@ -915,11 +921,11 @@ fn where_value_in_values_apply(
 }
 
 fn where_between_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  value_a val_a: WhereValue,
-  value_b val_b: WhereValue,
-  value_c val_c: WhereValue,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  value_a val_a: WhereValue(param),
+  value_b val_b: WhereValue(param),
+  value_c val_c: WhereValue(param),
+) -> PreparedStatement(param) {
   let prp_stm = case val_a {
     WhereColumnValue(col) -> prp_stm |> prepared_statement.append_sql(col)
     WhereParamValue(prm) -> prp_stm |> prepared_statement.append_param(prm)
@@ -962,9 +968,9 @@ pub type GroupBy {
 /// Apply group by clause to prepared statement
 ///
 pub fn group_by_clause_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   group_by grpb: GroupBy,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   case grpb {
     NoGroupBy -> prp_stm
     GroupBy(grpbs) ->
@@ -975,16 +981,18 @@ pub fn group_by_clause_apply(
 }
 
 fn group_by_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   group_bys grpbs: List(String),
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   case grpbs {
     [] -> prp_stm
     _ ->
       grpbs
       |> list.fold(
         prp_stm,
-        fn(new_prp_stm: PreparedStatement, s: String) -> PreparedStatement {
+        fn(new_prp_stm: PreparedStatement(param), s: String) -> PreparedStatement(
+          param,
+        ) {
           case new_prp_stm == prp_stm {
             True -> new_prp_stm |> prepared_statement.append_sql(s)
             False -> new_prp_stm |> prepared_statement.append_sql(", " <> s)
@@ -1017,16 +1025,16 @@ fn group_by_apply(
 /// - `EXCLUSIVE RIGHT JOIN`: `WHERE a.key IS NULL`
 /// - `EXCLUSIVE FULL JOIN`: `WHERE a.key IS NULL OR b.key IS NULL`
 ///
-pub type Joins {
+pub type Joins(param) {
   NoJoins
-  Joins(List(Join))
+  Joins(List(Join(param)))
 }
 
 /// The join target can be either a table or a sub-query.
 ///
-pub type JoinTarget {
+pub type JoinTarget(param) {
   JoinTable(table: String)
-  JoinSubQuery(query: ReadQuery)
+  JoinSubQuery(query: ReadQuery(param))
 }
 
 /// A Join can be one of:
@@ -1043,39 +1051,44 @@ pub type JoinTarget {
 /// - `LeftJoinLateralOnTrue`: `LEFT JOIN LATERAL ... ON TRUE`
 /// - `CrossJoinLateral`: `CROSS JOIN LATERAL`
 ///
-pub type Join {
-  InnerJoin(with: JoinTarget, alias: String, on: Where)
-  InnerJoinLateralOnTrue(with: JoinTarget, alias: String)
-  LeftJoin(with: JoinTarget, alias: String, on: Where)
-  LeftJoinLateralOnTrue(with: JoinTarget, alias: String)
-  RightJoin(with: JoinTarget, alias: String, on: Where)
-  FullJoin(with: JoinTarget, alias: String, on: Where)
-  CrossJoin(with: JoinTarget, alias: String)
-  CrossJoinLateral(with: JoinTarget, alias: String)
+pub type Join(param) {
+  InnerJoin(with: JoinTarget(param), alias: String, on: Where(param))
+  InnerJoinLateralOnTrue(with: JoinTarget(param), alias: String)
+  LeftJoin(with: JoinTarget(param), alias: String, on: Where(param))
+  LeftJoinLateralOnTrue(with: JoinTarget(param), alias: String)
+  RightJoin(with: JoinTarget(param), alias: String, on: Where(param))
+  FullJoin(with: JoinTarget(param), alias: String, on: Where(param))
+  CrossJoin(with: JoinTarget(param), alias: String)
+  CrossJoinLateral(with: JoinTarget(param), alias: String)
 }
 
 /// Apply join clauses to prepared statement.
 ///
 pub fn join_clause_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  joins jns: Joins,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  joins jns: Joins(param),
+) -> PreparedStatement(param) {
   case jns {
     Joins(jns) -> {
       jns
       |> list.fold(
         prp_stm,
-        fn(new_prp_stm: PreparedStatement, jn: Join) -> PreparedStatement {
+        fn(new_prp_stm: PreparedStatement(param), jn: Join(param)) -> PreparedStatement(
+          param,
+        ) {
           let join_command_apply = fn(
-            new_prp_stm: PreparedStatement,
+            new_prp_stm: PreparedStatement(param),
             sql_command: String,
-          ) -> PreparedStatement {
+          ) -> PreparedStatement(param) {
             new_prp_stm
             |> prepared_statement.append_sql(" " <> sql_command <> " ")
             |> join_apply(jn)
           }
 
-          let on_apply = fn(new_prp_stm: PreparedStatement, on: Where) -> PreparedStatement {
+          let on_apply = fn(
+            new_prp_stm: PreparedStatement(param),
+            on: Where(param),
+          ) -> PreparedStatement(param) {
             new_prp_stm
             |> prepared_statement.append_sql(" ON ")
             |> where_apply(on)
@@ -1118,9 +1131,9 @@ pub fn join_clause_apply(
 }
 
 pub fn join_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  join jn: Join,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  join jn: Join(param),
+) -> PreparedStatement(param) {
   case jn.with {
     JoinTable(table: tbl) ->
       prp_stm |> prepared_statement.append_sql(tbl <> " AS " <> jn.alias)
@@ -1138,16 +1151,16 @@ pub fn join_apply(
 
 /// Declare an order by clause.
 ///
-pub type OrderBy {
+pub type OrderBy(param) {
   NoOrderBy
-  OrderBy(values: List(OrderByValue))
+  OrderBy(values: List(OrderByValue(param)))
 }
 
 /// Order by values can be either a column or a fragment.
 ///
-pub type OrderByValue {
+pub type OrderByValue(param) {
   OrderByColumn(column: String, direction: OrderByDirection)
-  OrderByFragment(fragment: Fragment, direction: OrderByDirection)
+  OrderByFragment(fragment: Fragment(param), direction: OrderByDirection)
 }
 
 /// Order by direction can be one of:
@@ -1172,7 +1185,10 @@ pub type OrderByDirection {
   DescNullsLast
 }
 
-fn order_by_append(query_ordb: OrderBy, new_ordb: OrderBy) -> OrderBy {
+fn order_by_append(
+  query_ordb: OrderBy(param),
+  new_ordb: OrderBy(param),
+) -> OrderBy(param) {
   case query_ordb {
     NoOrderBy -> new_ordb
     OrderBy(qry_ordb_items) -> {
@@ -1193,9 +1209,9 @@ fn order_by_append(query_ordb: OrderBy, new_ordb: OrderBy) -> OrderBy {
 }
 
 fn order_by_clause_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  order_by ordb: OrderBy,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  order_by ordb: OrderBy(param),
+) -> PreparedStatement(param) {
   case ordb {
     NoOrderBy -> prp_stm
     OrderBy(ordbs) -> {
@@ -1206,7 +1222,9 @@ fn order_by_clause_apply(
           vs
           |> list.fold(
             prp_stm,
-            fn(new_prp_stm: PreparedStatement, v: OrderByValue) -> PreparedStatement {
+            fn(new_prp_stm: PreparedStatement(param), v: OrderByValue(param)) -> PreparedStatement(
+              param,
+            ) {
               case new_prp_stm == prp_stm {
                 True -> new_prp_stm |> order_by_value_apply(v)
                 False ->
@@ -1223,9 +1241,9 @@ fn order_by_clause_apply(
 }
 
 fn order_by_value_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  value v: OrderByValue,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  value v: OrderByValue(param),
+) -> PreparedStatement(param) {
   case v {
     OrderByColumn(col, dir) ->
       prp_stm
@@ -1278,9 +1296,9 @@ pub fn limit_new(limit lmt: Int) -> Limit {
 }
 
 fn limit_clause_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   limit lmt: Limit,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   case lmt {
     NoLimit -> ""
     Limit(limit: lmt) -> " LIMIT " <> lmt |> int.to_string
@@ -1309,9 +1327,9 @@ pub fn offset_new(offset offst: Int) -> Offset {
 }
 
 fn offset_clause_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   offset offst: Offset,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   case offst {
     NoOffset -> ""
     Offset(offset: offst) -> " OFFSET " <> offst |> int.to_string
@@ -1338,9 +1356,9 @@ pub type Epilog {
 /// Apply the epilog to the prepared statement.
 ///
 pub fn epilog_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   epilog eplg: Epilog,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   case eplg {
     NoEpilog -> prp_stm
     Epilog(string: eplgs) -> prp_stm |> prepared_statement.append_sql(eplgs)
@@ -1362,9 +1380,9 @@ pub type Comment {
 /// Apply the comment to the prepared statement.
 ///
 pub fn comment_apply(
-  prepared_statement prp_stm: PreparedStatement,
+  prepared_statement prp_stm: PreparedStatement(param),
   comment cmmnt: Comment,
-) -> PreparedStatement {
+) -> PreparedStatement(param) {
   case cmmnt {
     NoComment -> prp_stm
     Comment(string: cmmnt) ->
@@ -1409,9 +1427,9 @@ pub fn comment_apply(
 /// As a strategy it is recommended to ALWAYS USE MODULE CONSTANTS for
 /// any `fragment`-field string.
 ///
-pub type Fragment {
+pub type Fragment(param) {
   FragmentLiteral(fragment: String)
-  FragmentPrepared(fragment: String, params: List(Param))
+  FragmentPrepared(fragment: String, params: List(param))
 }
 
 /// Use to mark the position where a parameter should be inserted into for a
@@ -1447,9 +1465,9 @@ pub fn fragment_prepared_split_string(
 }
 
 fn fragment_apply(
-  prepared_statement prp_stm: PreparedStatement,
-  fragment frgmt: Fragment,
-) -> PreparedStatement {
+  prepared_statement prp_stm: PreparedStatement(param),
+  fragment frgmt: Fragment(param),
+) -> PreparedStatement(param) {
   case frgmt {
     FragmentLiteral(fragment: frgmt) ->
       prp_stm |> prepared_statement.append_sql(frgmt)
@@ -1495,9 +1513,9 @@ fn fragment_apply(
         frgmts
         |> list.fold(
           #(prp_stm, prms),
-          fn(acc: #(PreparedStatement, List(Param)), frgmnt: String) -> #(
-            PreparedStatement,
-            List(Param),
+          fn(acc: #(PreparedStatement(param), List(param)), frgmnt: String) -> #(
+            PreparedStatement(param),
+            List(param),
           ) {
             let new_prp_stm = acc.0
 
