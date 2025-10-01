@@ -19,12 +19,6 @@ services:
     volumes:
       - ./docker/data/postgres-data:/var/lib/postgresql/data
       # - ./sql/create_tables.sql:/docker-entrypoint-initdb.d/create_tables.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready", "-d", "db_prod"]
-      interval: 30s
-      timeout: 60s
-      retries: 5
-      start_period: 80s
   mariadb:
     container_name: gleam-cake-test-mariadb
     dns:
@@ -47,12 +41,6 @@ services:
         "--collation-server=utf8mb4_unicode_ci",
         "--lower_case_table_names=1",
       ]
-    healthcheck:
-      test: ["CMD", "/usr/local/bin/healthcheck.sh", "--innodb_initialized"]
-      start_period: 5s
-      timeout: 5s
-      interval: 5s
-      retries: 5
   mysql:
     container_name: gleam-cake-test-mysql
     dns:
@@ -68,12 +56,6 @@ services:
       - "127.0.0.1:3308:3306"
     volumes:
       - ./docker/data/mysql-data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "/usr/local/bin/healthcheck.sh", "--innodb_initialized"]
-      start_period: 5s
-      timeout: 5s
-      interval: 5s
-      retries: 5
     command:
       [
         "mysqld",

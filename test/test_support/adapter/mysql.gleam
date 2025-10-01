@@ -8,7 +8,8 @@ import cake.{
 }
 import cake/dialect/mysql_dialect
 import cake/param.{
-  type Param, BoolParam, FloatParam, IntParam, NullParam, StringParam,
+  type Param, BoolParam, DateParam, FloatParam, IntParam, NullParam, StringParam,
+  TimeParam,
 }
 import gleam/dynamic/decode.{type Decoder}
 import gleam/list
@@ -143,6 +144,8 @@ fn cake_param_to_client_param(param param: Param) -> Value {
     IntParam(param) -> shork.int(param)
     StringParam(param) -> shork.text(param)
     NullParam -> shork.null()
+    DateParam(_) -> todo
+    TimeParam(_) -> todo
   }
 }
 

@@ -8,7 +8,8 @@ import cake.{
 }
 import cake/dialect/postgres_dialect
 import cake/param.{
-  type Param, BoolParam, FloatParam, IntParam, NullParam, StringParam,
+  type Param, BoolParam, DateParam, FloatParam, IntParam, NullParam, StringParam,
+  TimeParam,
 }
 import gleam/dynamic/decode.{type Decoder}
 import gleam/erlang/process
@@ -145,6 +146,8 @@ fn cake_param_to_client_param(param param: Param) -> Value {
     IntParam(param) -> pog.int(param)
     StringParam(param) -> pog.text(param)
     NullParam -> pog.null()
+    DateParam(param) -> pog.calendar_date(param)
+    TimeParam(param) -> pog.calendar_time_of_day(param)
   }
 }
 

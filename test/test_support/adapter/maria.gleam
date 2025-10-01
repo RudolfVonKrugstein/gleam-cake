@@ -143,6 +143,8 @@ fn cake_param_to_client_param(param param: Param) -> Value {
     IntParam(param) -> shork.int(param)
     StringParam(param) -> shork.text(param)
     NullParam -> shork.null()
+    param.DateParam(_) -> todo
+    param.TimeParam(_) -> todo
   }
 }
 

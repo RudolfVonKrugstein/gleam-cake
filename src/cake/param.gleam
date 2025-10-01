@@ -1,3 +1,5 @@
+import gleam/time/calendar
+
 //// A `Param` is a value that can be used in a query.
 ////
 
@@ -12,6 +14,8 @@ pub type Param {
   IntParam(Int)
   StringParam(String)
   NullParam
+  DateParam(calendar.Date)
+  TimeParam(calendar.TimeOfDay)
   //
   // Not sure this should be here, but should it not?
   // Maybe add:
